@@ -1,0 +1,8 @@
+Flask>=3.0
+Flask-SQLAlchemy>=3.0
+Flask-Migrate>=4.0
+Flask-Swagger>=0.2.14
+Flask-Cors>=3.0
+python-dotenv>=0.21
+Flask-Admin>=1.5.7
+psycopg2-binary>=2.8
