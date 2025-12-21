@@ -1,52 +1,26 @@
-import React, { useEffect } from "react"
-import rigoImageUrl from "../assets/img/rigo-baby.jpg";
-import useGlobalReducer from "../hooks/useGlobalReducer.jsx";
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
-export const Home = () => {
+const Home = () => {
+  const [products, setProducts] = useState([]);
 
-	const { store, dispatch } = useGlobalReducer()
+  useEffect(() => {
+    fetch("http://localhost:5000/api/products")
+      .then(res => res.json())
+      .then(data => setProducts(data));
+  }, []);
 
-	const loadMessage = async () => {
-		try {
-			const backendUrl = import.meta.env.VITE_BACKEND_URL
+  return (
+    <div>
+      <h1>Productos</h1>
+      {products.map(p => (
+        <div key={p.id}>
+          <Link to={`/single/${p.id}`}>{p.title}</Link>
+        </div>
+      ))}
+    </div>
+  );
+};
 
-			if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined in .env file")
+export default Home;
 
-			const response = await fetch(backendUrl + "/api/hello")
-			const data = await response.json()
-
-			if (response.ok) dispatch({ type: "set_hello", payload: data.message })
-
-			return data
-
-		} catch (error) {
-			if (error.message) throw new Error(
-				`Could not fetch the message from the backend.
-				Please check if the backend is running and the backend port is public.`
-			);
-		}
-
-	}
-
-	useEffect(() => {
-		loadMessage()
-	}, [])
-
-	return (
-		<div className="text-center mt-5">
-			<h1 className="display-4">Hello Rigo!!</h1>
-			<p className="lead">
-				<img src={rigoImageUrl} className="img-fluid rounded-circle mb-3" alt="Rigo Baby" />
-			</p>
-			<div className="alert alert-info">
-				{store.message ? (
-					<span>{store.message}</span>
-				) : (
-					<span className="text-danger">
-						Loading message from the backend (make sure your python 🐍 backend is running)...
-					</span>
-				)}
-			</div>
-		</div>
-	);
-}; 
