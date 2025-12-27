@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCart } from "../context/CartContext";
 
-export default function Home() {
+export default function Products() {
   const [products, setProducts] = useState([]);
   const { addToCart } = useCart();
 
@@ -20,7 +20,7 @@ export default function Home() {
 
   return (
     <div>
-      <h1>Productos</h1>
+      <h1>Products</h1>
       <ul>
         {products.map(p => (
           <li key={p.id}>

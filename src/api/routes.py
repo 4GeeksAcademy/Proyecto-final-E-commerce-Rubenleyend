@@ -29,7 +29,7 @@ def hello():
 # ======================================
 
 # Crear usuario (registro)
-@api.route('/users', methods=['POST'])
+@api.route('/register', methods=['POST'])
 def create_user():
     data = request.get_json()
 
