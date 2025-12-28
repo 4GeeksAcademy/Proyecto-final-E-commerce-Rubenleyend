@@ -1,13 +1,16 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import useGlobalReducer from "../hooks/useGlobalReducer";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { store, dispatch } = useGlobalReducer();
 
-  const cartCount = store.cartItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
-  const totalPrice = store.cartItems.reduce(
-    (acc, it) => acc + ((it.product?.price_cents || 0) * it.quantity) / 100,
+  const cartItems = Array.isArray(store?.cartItems) ? store.cartItems : [];
+
+  const cartCount = cartItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+  const totalPrice = cartItems.reduce(
+    (acc, it) => acc + ((it.product?.price_cents || 0) * (it.quantity || 0)) / 100,
     0
   );
 
@@ -16,24 +19,83 @@ export default function Navbar() {
     navigate("/login");
   };
 
-  const refreshCart = async (token = store.token) => {
-    if (!token) return;
-    const items = await fetch(`${store.backendUrl}/api/cart-items`, {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then((r) => r.json());
+  const handleUnauthorized = () => {
+    dispatch({ type: "logout" });
+    navigate("/login", { replace: true });
+  };
 
+  const refreshCart = async (token = store?.token) => {
+    if (!token) return;
+
+    const res = await fetch(`${store.backendUrl}/api/cart-items`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    //  token caducado
+    if (res.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+
+    const items = await res.json();
     dispatch({ type: "set_cart", payload: items });
   };
 
+  // recargar el usuario 
+  const refreshMe = async (token = store?.token) => {
+    if (!token) return;
+
+    const meRes = await fetch(`${store.backendUrl}/api/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    //  token caducado
+    if (meRes.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+
+    if (!meRes.ok) return;
+
+    const me = await meRes.json();
+    dispatch({ type: "set_me", payload: me });
+  };
+
+  // al recargar la página, si hay token, recargar carrito + usuario
+  useEffect(() => {
+    if (store?.token) {
+      refreshCart(store.token);
+      refreshMe(store.token);
+    }
+    
+  }, [store?.token]);
+
+  const removeItem = async (itemId) => {
+    if (!store?.token) return;
+
+    const res = await fetch(`${store.backendUrl}/api/cart-items/${itemId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${store.token}` },
+    });
+
+    // token caducado
+    if (res.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+
+    await refreshCart();
+  };
+
   const setQty = async (itemId, qty) => {
-    if (!store.token) return;
+    if (!store?.token) return;
+
     if (qty < 1) {
-  await removeItem(itemId);
-  return;
-}
+      await removeItem(itemId);
+      return;
+    }
 
-
-    await fetch(`${store.backendUrl}/api/cart-items/${itemId}`, {
+    const res = await fetch(`${store.backendUrl}/api/cart-items/${itemId}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -42,17 +104,11 @@ export default function Navbar() {
       body: JSON.stringify({ quantity: qty }),
     });
 
-    await refreshCart();
-  };
-
-  const removeItem = async (itemId) => {
-    if (!store.token) return;
-    
-
-    await fetch(`${store.backendUrl}/api/cart-items/${itemId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${store.token}` },
-    });
+    //token caducado
+    if (res.status === 401) {
+      handleUnauthorized();
+      return;
+    }
 
     await refreshCart();
   };
@@ -60,7 +116,7 @@ export default function Navbar() {
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
       <div className="container">
-        <Link className="navbar-brand" to="/">E-Commerce</Link>
+        <Link className="navbar-brand" to="/">Marketly</Link>
 
         <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
           <span className="navbar-toggler-icon"></span>
@@ -73,7 +129,7 @@ export default function Navbar() {
           </ul>
 
           <ul className="navbar-nav">
-            {store.token ? (
+            {store?.token ? (
               <>
                 <li className="nav-item">
                   <Link className="nav-link" to="/profile">
@@ -81,13 +137,12 @@ export default function Navbar() {
                   </Link>
                 </li>
 
-                {/* Dropdown carrito */}
                 <li className="nav-item dropdown">
                   <button
                     className="btn btn-dark nav-link dropdown-toggle"
                     data-bs-toggle="dropdown"
                     style={{ border: "none" }}
-                    onClick={() => refreshCart()} // refresca al abrir
+                    onClick={() => refreshCart()}
                   >
                     🛒 {cartCount}
                   </button>
@@ -100,12 +155,12 @@ export default function Navbar() {
                       </Link>
                     </div>
 
-                    {store.cartItems.length === 0 ? (
+                    {cartItems.length === 0 ? (
                       <div className="text-muted">Carrito vacío</div>
                     ) : (
                       <>
                         <div style={{ maxHeight: 280, overflowY: "auto" }}>
-                          {store.cartItems.map((it) => (
+                          {cartItems.map((it) => (
                             <div key={it.id} className="border-bottom pb-2 mb-2">
                               <div className="fw-semibold">{it.product?.title}</div>
 
@@ -165,10 +220,7 @@ export default function Navbar() {
                           <strong>{totalPrice.toFixed(2)}€</strong>
                         </div>
 
-                        <button
-                          className="btn btn-primary w-100 mt-2"
-                          onClick={() => navigate("/cart")}
-                        >
+                        <button className="btn btn-primary w-100 mt-2" onClick={() => navigate("/cart")}>
                           Pagar
                         </button>
                       </>

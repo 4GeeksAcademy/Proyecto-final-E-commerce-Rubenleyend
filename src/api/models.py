@@ -30,6 +30,11 @@ class User(db.Model):
         back_populates="user", cascade="all, delete-orphan"
     )
 
+    # Pedidos del usuario
+    orders: Mapped[list["Order"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
     def serialize(self):
         return {
             "id": self.id,
@@ -39,6 +44,7 @@ class User(db.Model):
             "address": self.address,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
 
 # -----------------------------
 # Producto
@@ -59,6 +65,11 @@ class Product(db.Model):
         back_populates="product", cascade="all, delete-orphan"
     )
 
+    # Relación con items de pedido
+    order_items: Mapped[list["OrderItem"]] = relationship(
+        back_populates="product"
+    )
+
     def serialize(self):
         return {
             "id": self.id,
@@ -68,6 +79,7 @@ class Product(db.Model):
             "image_url": self.image_url,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
 
 # -----------------------------
 # CartItem
@@ -93,4 +105,65 @@ class CartItem(db.Model):
             "product": self.product.serialize() if self.product else None,
             "quantity": self.quantity,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# -----------------------------
+# Order
+# -----------------------------
+class Order(db.Model):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+
+    # total en céntimos para evitar problemas de decimales
+    total_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="paid")
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="orders")
+    items: Mapped[list["OrderItem"]] = relationship(
+        back_populates="order", cascade="all, delete-orphan"
+    )
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "total_cents": self.total_cents,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "items": [it.serialize() for it in self.items],
+        }
+
+
+# -----------------------------
+# OrderItem
+# -----------------------------
+class OrderItem(db.Model):
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("order.id"), nullable=False)
+    product_id: Mapped[int] = mapped_column(ForeignKey("product.id"), nullable=False)
+
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    # guardamos el precio en el momento de compra
+    unit_price_cents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    order: Mapped["Order"] = relationship(back_populates="items")
+    product: Mapped["Product"] = relationship(back_populates="order_items")
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "order_id": self.order_id,
+            "product_id": self.product_id,
+            "quantity": self.quantity,
+            "unit_price_cents": self.unit_price_cents,
+            "product": self.product.serialize() if self.product else None,
         }

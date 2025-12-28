@@ -1,34 +1,27 @@
-
 import click
-from api.models import db, User
+from flask.cli import with_appcontext
+from src.api.models import db, User
 
-"""
-In this file, you can add as many commands as you want using the @app.cli.command decorator
-Flask commands are usefull to run cronjobs or tasks outside of the API but sill in integration 
-with youy database, for example: Import the price of bitcoin every night as 12am
-"""
 def setup_commands(app):
-    
-    """ 
-    This is an example command "insert-test-users" that you can run from the command line
-    by typing: $ flask insert-test-users 5
-    Note: 5 is the number of users to add
-    """
-    @app.cli.command("insert-test-users") # name of our command
-    @click.argument("count") # argument of out command
-    def insert_test_users(count):
-        print("Creating test users")
-        for x in range(1, int(count) + 1):
-            user = User()
-            user.email = "test_user" + str(x) + "@test.com"
-            user.password = "123456"
-            user.is_active = True
-            db.session.add(user)
-            db.session.commit()
-            print("User: ", user.email, " created.")
 
-        print("All test users created")
+    @app.cli.command("insert-test-users")
+    @with_appcontext
+    def insert_test_users():
+        """Inserts test users into the database."""
+        if User.query.filter_by(email="test@test.com").first():
+            click.echo("Test users already inserted.")
+            return
 
-    @app.cli.command("insert-test-data")
-    def insert_test_data():
-        pass
+        test_user = User(
+            email="test@test.com",
+            password="123456",
+            is_active=True,
+            name="Test",
+            lastname="User",
+            address="Calle Test 123"
+        )
+
+        db.session.add(test_user)
+        db.session.commit()
+
+        click.echo("Test user inserted ")

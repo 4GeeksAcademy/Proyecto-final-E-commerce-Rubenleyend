@@ -4,7 +4,7 @@ import useGlobalReducer from "../hooks/useGlobalReducer";
 export default function ProtectedRoute({ children }) {
   const { store } = useGlobalReducer();
 
-  if (!store.token) return <Navigate to="/login" replace />;
+  if (!store || !store.token) return <Navigate to="/login" replace />;
 
   return children;
 }

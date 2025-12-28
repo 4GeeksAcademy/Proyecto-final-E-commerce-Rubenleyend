@@ -39,18 +39,26 @@ export default function storeReducer(store, action = {}) {
       localStorage.removeItem("token");
       return { ...store, token: null, user: null, cartItems: [] };
 
+    // Alias/Nombre
     case "set_me":
+    case "set_user":
       return { ...store, user: action.payload };
 
     case "set_cart": {
-  const items = Array.isArray(action.payload) ? action.payload : [];
+      const raw = Array.isArray(action.payload) ? action.payload : [];
 
-  // Orden por id 
-  items.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+      // no cambia el payload
+      const items = [...raw];
 
-  return { ...store, cartItems: items };
-}
+      // Orden por id
+      items.sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
 
+      return { ...store, cartItems: items };
+    }
+
+    // si no reconoce la acción, devuelve el store actual
+    default:
+      return store;
   }
 }
 

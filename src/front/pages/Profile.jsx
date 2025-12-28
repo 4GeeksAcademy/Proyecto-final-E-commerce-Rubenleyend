@@ -1,135 +1,268 @@
 import { useEffect, useState } from "react";
 import useGlobalReducer from "../hooks/useGlobalReducer";
-
-function Field({ label, name, value, editing, onEdit, onChange }) {
-  return (
-    <div className="mb-3">
-      <label className="form-label d-flex justify-content-between">
-        <span>{label}</span>
-        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onEdit(name)}>
-          ✏️
-        </button>
-      </label>
-      <input
-        className="form-control"
-        name={name}
-        value={value}
-        onChange={onChange}
-        disabled={!editing}
-      />
-    </div>
-  );
-}
+import { useNavigate } from "react-router-dom";
 
 export default function Profile() {
   const { store, dispatch } = useGlobalReducer();
+  const navigate = useNavigate();
 
-  const [form, setForm] = useState({ name: "", lastname: "", address: "", email: "", password: "" });
-  const [editing, setEditing] = useState({ name: false, lastname: false, address: false, email: false, password: false });
+  const [form, setForm] = useState({
+    name: "",
+    lastname: "",
+    address: "",
+    email: "",
+  });
+
+  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
-  // Cargar usuario actual
-  useEffect(() => {
-    if (!store.user && store.token) {
-      fetch(`${store.backendUrl}/api/me`, {
-        headers: { Authorization: `Bearer ${store.token}` },
-      })
-        .then((r) => r.json())
-        .then((me) => dispatch({ type: "set_me", payload: me }));
-    }
-  }, [store.token]);
+  // Borrado
+  const [showDelete, setShowDelete] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    if (store.user) {
-      setForm({
-        name: store.user.name || "",
-        lastname: store.user.lastname || "",
-        address: store.user.address || "",
-        email: store.user.email || "",
-        password: "",
-      });
-    }
-  }, [store.user]);
-
-  const onEdit = (field) => {
-    setEditing((prev) => ({ ...prev, [field]: true }));
-    setMsg("");
-  };
-
-  const onChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
-
-  const save = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const loadMe = async () => {
+    setErr("");
     setMsg("");
 
     try {
-      const payload = {
-        name: form.name,
-        lastname: form.lastname,
-        address: form.address,
-        email: form.email,
-      };
-      if (form.password) payload.password = form.password;
+      const res = await fetch(`${store.backendUrl}/api/me`, {
+        headers: { Authorization: `Bearer ${store.token}` },
+      });
+      
+      //Si caduca el token hacemos logout y redirecionamos 
+      
+      if (res.status === 401) {
+        dispatch({ type: "logout" });
+        navigate("/login", { replace: true });
+        return;
+      }
 
-      const resp = await fetch(`${store.backendUrl}/api/me`, {
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`Error /me: ${res.status} - ${t}`);
+      }
+
+      const data = await res.json();
+
+      // guardamos user en store 
+      dispatch({ type: "set_user", payload: data });
+
+      setForm({
+        name: data.name || "",
+        lastname: data.lastname || "",
+        address: data.address || "",
+        email: data.email || "",
+      });
+    } catch (e) {
+      setErr(e.message || "No se pudo cargar el perfil");
+    }
+  };
+
+  useEffect(() => {
+    if (!store.token) return;
+    loadMe();
+    
+  }, [store.token]);
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const saveProfile = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setErr("");
+    setMsg("");
+
+    try {
+      const res = await fetch(`${store.backendUrl}/api/me`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${store.token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(form),
       });
 
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.error || "No se pudo guardar");
+      //Si caduca el token hacemos logout y redirecionamos 
+      if (res.status === 401) {
+        dispatch({ type: "logout" });
+        navigate("/login", { replace: true });
+        return;
+      }
 
-      dispatch({ type: "set_me", payload: data });
-      setEditing({ name: false, lastname: false, address: false, email: false, password: false });
-      setForm((p) => ({ ...p, password: "" }));
-      setMsg("Guardado ✅");
-    } catch (err) {
-      setMsg(err.message || "Error ❌");
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`Error guardando: ${res.status} - ${t}`);
+      }
+
+      const updated = await res.json();
+      dispatch({ type: "set_user", payload: updated });
+      setMsg("Perfil actualizado ✅");
+    } catch (e) {
+      setErr(e.message || "No se pudo guardar");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
+  const deleteAccount = async () => {
+    setDeleting(true);
+    setErr("");
+    setMsg("");
+
+    try {
+      const res = await fetch(`${store.backendUrl}/api/me`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${store.token}` },
+      });
+
+      // Cuando caduca el token se cierra la sesion
+      if (res.status === 401) {
+        dispatch({ type: "logout" });
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`Error borrando: ${res.status} - ${t}`);
+      }
+
+      dispatch({ type: "logout" });
+      navigate("/");
+      alert("Cuenta eliminada definitivamente.");
+    } catch (e) {
+      setErr(e.message || "No se pudo borrar la cuenta");
+    } finally {
+      setDeleting(false);
+      setShowDelete(false);
+      setConfirmText("");
+    }
+  };
+
+  if (!store.token) {
+    return (
+      <div className="container mt-4">
+        <div className="alert alert-warning">
+          Tienes que iniciar sesión para ver tu perfil.
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ maxWidth: 600 }}>
+    <div className="container mt-4" style={{ maxWidth: 720 }}>
       <h2 className="mb-3">Mi perfil</h2>
 
-      <form onSubmit={save} className="card p-3">
-        <Field label="Nombre" name="name" value={form.name} editing={editing.name} onEdit={onEdit} onChange={onChange} />
-        <Field label="Apellidos" name="lastname" value={form.lastname} editing={editing.lastname} onEdit={onEdit} onChange={onChange} />
-        <Field label="Dirección" name="address" value={form.address} editing={editing.address} onEdit={onEdit} onChange={onChange} />
-        <Field label="Email" name="email" value={form.email} editing={editing.email} onEdit={onEdit} onChange={onChange} />
+      {msg && <div className="alert alert-success">{msg}</div>}
+      {err && <div className="alert alert-danger">{err}</div>}
 
-        <div className="mb-3">
-          <label className="form-label d-flex justify-content-between">
-            <span>Nueva contraseña (opcional)</span>
-            <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => onEdit("password")}>
-              ✏️
-            </button>
-          </label>
-          <input
-            className="form-control"
-            type="password"
-            name="password"
-            value={form.password}
-            onChange={onChange}
-            disabled={!editing.password}
-            placeholder="Deja vacío si no quieres cambiarla"
-          />
+      <form className="card p-3 mb-4" onSubmit={saveProfile}>
+        <div className="row g-3">
+          <div className="col-md-6">
+            <label className="form-label">Nombre</label>
+            <input
+              className="form-control"
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div className="col-md-6">
+            <label className="form-label">Apellidos</label>
+            <input
+              className="form-control"
+              name="lastname"
+              value={form.lastname}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div className="col-12">
+            <label className="form-label">Dirección</label>
+            <input
+              className="form-control"
+              name="address"
+              value={form.address}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div className="col-12">
+            <label className="form-label">Email</label>
+            <input
+              className="form-control"
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={handleChange}
+              required
+            />
+          </div>
         </div>
 
-        <button className="btn btn-primary" type="submit" disabled={loading}>
-          {loading ? "Guardando..." : "Guardar cambios"}
+        <button className="btn btn-primary mt-3" disabled={saving}>
+          {saving ? "Guardando..." : "Guardar cambios"}
         </button>
-
-        {msg && <div className="alert alert-info mt-3">{msg}</div>}
       </form>
+
+      <div className="card border-danger p-3">
+        <h5 className="text-danger mb-2">Peligro</h5>
+        <p className="mb-3">
+          Si borras tu cuenta, se eliminará definitivamente y se borrará todo lo
+          asociado (carrito, etc.).
+        </p>
+
+        {!showDelete ? (
+          <button className="btn btn-danger" onClick={() => setShowDelete(true)}>
+            Borrar cuenta
+          </button>
+        ) : (
+          <div className="bg-light p-3 rounded">
+            <p className="mb-2 fw-semibold text-danger">
+              ¿Estás seguro? Esto es definitivo.
+            </p>
+            <p className="mb-2">
+              Escribe <strong>ACEPTO</strong> para confirmar:
+            </p>
+
+            <input
+              className="form-control mb-2"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="Escribe ACEPTO"
+            />
+
+            <div className="d-flex gap-2">
+              <button
+                className="btn btn-outline-secondary"
+                onClick={() => {
+                  setShowDelete(false);
+                  setConfirmText("");
+                }}
+                disabled={deleting}
+              >
+                Cancelar
+              </button>
+
+              <button
+                className="btn btn-danger"
+                onClick={deleteAccount}
+                disabled={deleting || confirmText.trim().toUpperCase() !== "ACEPTO"}
+              >
+                {deleting ? "Borrando..." : "Confirmar borrado"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

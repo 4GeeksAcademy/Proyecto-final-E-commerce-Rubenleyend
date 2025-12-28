@@ -2,16 +2,17 @@
 Archivo principal de la app Flask
 """
 import os
+from datetime import timedelta
 from flask import Flask, jsonify, send_from_directory
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
-from api.models import db
-from api.routes import api
-from api.utils import APIException, generate_sitemap
-from api.admin import setup_admin
-from api.commands import setup_commands
+from src.api.models import db
+from src.api.routes import api
+from src.api.utils import APIException, generate_sitemap
+from src.api.admin import setup_admin
+from src.api.commands import setup_commands
 
 ENV = "development" if os.getenv("FLASK_DEBUG") == "1" else "production"
 static_file_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../dist/")
@@ -35,6 +36,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # ---------------------------
 app.config["JWT_SECRET_KEY"] = os.getenv("FLASK_APP_KEY", "super-secret-key")
 
+# duración del token
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=7)
+
 # ---------------------------
 # EXTENSIONS
 # ---------------------------
@@ -42,7 +46,7 @@ db.init_app(app)
 Migrate(app, db, compare_type=True)
 JWTManager(app)
 
-# ✅ CORS bien configurado (IMPORTANTE)
+# CORS
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Admin + Commands
